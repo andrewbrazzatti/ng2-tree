@@ -8,7 +8,9 @@ import {
   OnInit,
   SimpleChanges,
   TemplateRef,
-  ViewChild
+  ViewChild,
+  Output,
+  EventEmitter
 } from '@angular/core';
 
 import * as TreeTypes from './tree.types';
@@ -75,10 +77,10 @@ import { get, isNil } from './utils/fn.utils';
       </node-menu>
 
       <div *ngIf="tree.keepNodesInDOM()" [ngStyle]="{'display': tree.isNodeExpanded() ? 'block' : 'none'}">
-        <tree-internal *ngFor="let child of tree.childrenAsync | async" [tree]="child" [template]="template" [settings]="settings"></tree-internal>
+        <tree-internal *ngFor="let child of tree.childrenAsync | async" [tree]="child" [template]="template" [settings]="settings" [treeControllerCreatedFunction]="treeControllerCreatedFunction"></tree-internal>
       </div>
       <ng-template [ngIf]="tree.isNodeExpanded() && !tree.keepNodesInDOM()">
-        <tree-internal *ngFor="let child of tree.childrenAsync | async" [tree]="child" [template]="template" [settings]="settings"></tree-internal>
+        <tree-internal *ngFor="let child of tree.childrenAsync | async" [tree]="child" [template]="template" [settings]="settings" [treeControllerCreatedFunction]="treeControllerCreatedFunction"></tree-internal>
       </ng-template>
     </li>
   </ul>
@@ -101,6 +103,8 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
 
   private subscriptions: Subscription[] = [];
 
+  @Input() public treeControllerCreatedFunction: any;
+
   public constructor(
     private nodeMenuService: NodeMenuService,
     public treeService: TreeService,
@@ -108,9 +112,14 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
   ) {}
 
   public ngAfterViewInit(): void {
+    let dontCascadeCheckboxSelectToChildren = !get(this.settings, 'cascadeCheckboxSelectToChildren', true);
     if (this.tree.checked && !(this.tree as any).firstCheckedFired) {
-      (this.tree as any).firstCheckedFired = true;
-      this.treeService.fireNodeChecked(this.tree);
+      if (!dontCascadeCheckboxSelectToChildren) {
+        (this.tree as any).firstCheckedFired = true;
+        this.treeService.fireNodeChecked(this.tree);
+      } else {
+        this.tree.checked = false;
+      }
     }
   }
 
@@ -119,6 +128,7 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
     if (nodeId) {
       this.controller = new TreeController(this);
       this.treeService.setController(nodeId, this.controller);
+      this.treeControllerCreatedFunction({ id: nodeId, controller: this.controller });
     }
 
     this.settings = this.settings || new Ng2TreeSettings();
@@ -152,7 +162,10 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
     this.subscriptions.push(
       this.treeService.nodeChecked$
         .merge(this.treeService.nodeUnchecked$)
-        .filter((e: NodeCheckedEvent) => this.eventContainsId(e) && this.tree.hasChild(e.node))
+        .filter((e: NodeCheckedEvent) => {
+          console.log('in the filter');
+          return this.eventContainsId(e) && this.tree.hasChild(e.node);
+        })
         .subscribe((e: NodeCheckedEvent) => this.updateCheckboxState())
     );
   }
@@ -330,7 +343,10 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
 
     this.checkboxElementRef.nativeElement.indeterminate = false;
     this.treeService.fireNodeChecked(this.tree);
-    this.executeOnChildController(controller => controller.check());
+    let dontCascadeCheckboxSelectToChildren = !get(this.settings, 'cascadeCheckboxSelectToChildren', true);
+    if (!dontCascadeCheckboxSelectToChildren) {
+      this.executeOnChildController(controller => controller.check());
+    }
     this.tree.checked = true;
   }
 
@@ -341,7 +357,10 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
 
     this.checkboxElementRef.nativeElement.indeterminate = false;
     this.treeService.fireNodeUnchecked(this.tree);
-    this.executeOnChildController(controller => controller.uncheck());
+    let dontCascadeCheckboxSelectToChildren = !get(this.settings, 'cascadeCheckboxSelectToChildren', true);
+    if (!dontCascadeCheckboxSelectToChildren) {
+      this.executeOnChildController(controller => controller.uncheck());
+    }
     this.tree.checked = false;
   }
 
@@ -370,8 +389,11 @@ export class TreeInternalComponent implements OnInit, OnChanges, OnDestroy, Afte
         this.treeService.fireNodeChecked(this.tree);
       } else {
         this.tree.checked = false;
-        this.checkboxElementRef.nativeElement.indeterminate = true;
-        this.treeService.fireNodeIndetermined(this.tree);
+        let dontCascadeCheckboxSelectToChildren = !get(this.settings, 'cascadeCheckboxSelectToChildren', true);
+        if (!dontCascadeCheckboxSelectToChildren) {
+          this.checkboxElementRef.nativeElement.indeterminate = true;
+          this.treeService.fireNodeIndetermined(this.tree);
+        }
       }
     });
   }

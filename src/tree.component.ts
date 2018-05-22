@@ -57,6 +57,8 @@ export class TreeComponent implements OnInit, OnChanges, OnDestroy {
 
   @Output() public nodeUnchecked: EventEmitter<NodeUncheckedEvent> = new EventEmitter();
 
+  @Output() public treeControllerCreated: EventEmitter<any> = new EventEmitter();
+
   @Output() public menuItemSelected: EventEmitter<any> = new EventEmitter();
 
   public tree: Tree;
@@ -78,6 +80,7 @@ export class TreeComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   public ngOnInit(): void {
+    this.rootComponent['treeControllerCreatedFunction'] = this.internalTreeControllerCreated.bind(this);
     this.subscriptions.push(
       this.treeService.nodeRemoved$.subscribe((e: NodeEvent) => {
         this.nodeRemoved.emit(e);
@@ -161,5 +164,9 @@ export class TreeComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub && sub.unsubscribe());
+  }
+
+  public internalTreeControllerCreated(controllerInfo) {
+    this.treeControllerCreated.emit(controllerInfo);
   }
 }
